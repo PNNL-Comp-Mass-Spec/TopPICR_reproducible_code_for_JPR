@@ -1,0 +1,43 @@
+# This file is used to specify modifications
+# # for comments
+# To input a modification, use the following format:
+#
+# Name,Mass,Residues,Position,UnimodID
+#
+# Name: name of the modification (Unimod PSI-MS name)
+# 	- The Unimod PSI-MS names are recommended
+# 	- E.g. Phospho, Acetyl
+# 	- Visit http://www.unimod.org to get PSI-MS names.
+#
+# Mass: monoisotopic mass of modification. 
+#   - It is important to specify accurate masses (integer masses are insufficient).
+# 	- E.g. 15.994915 
+#
+# Residues: amino acids that can be modified
+# 	- Use * if this modification is applicable to all the 20 amino acids. 
+#
+# Position: positions in the protein where the modification can be attached. 
+# 	- Only one value can be used: 
+# 	- any (anywhere)
+#
+# UnimodID: unmimod id of the modification
+#   - Please use -1, if not in unimod
+
+Acetyl,42.010565,K,any,1
+Amidated,-0.984016,*,C-term,2
+Carbamyl,43.005814,K,any,5
+Carbamyl-N,43.005814,*,N-term,5
+Deamidated,0.984016,QN,any,7
+Dehydrated,-18.010565,DYTS,any,23
+Dehydro,-1.007825,C,any,374
+Disulfide,-2.015650,C,any,2020
+Dimethylation,28.031300,KR,any,36
+Glutathione,305.068156,C,any,55
+Cysteinyl,119.004099,C,any,312	
+IronAdduct,52.911464,DE,any,1870
+Methylation,14.015650,CHKNQRILDEST,any,34
+Phosphorylation,79.966331,STY,any,21
+Glu->pyro-Glu,-18.010565,E,N-term,27
+Gln->pyro-Glu,-17.026549,Q,N-term,28
+Oxidation,15.994915,CMW,any,35
+Dioxidation,31.989829,CMW,any,425
