@@ -1,0 +1,974 @@
+---
+title: ''
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  results = "hide",
+  error = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+#### Load R libraries
+
+You will need the following libraries: MSnSet.utils, plotly, tidyverse, and TopPICR.
+
+```{r include=FALSE}
+# To download the most recent version of MSnSet.utils:
+# devtools::install_github("PNNL-Comp-Mass-Spec/MSnSet.utils")
+library (MSnSet.utils)
+library (plotly)
+library (tidyverse)
+# To download the most recent version of TopPICR:
+# devtools::install_github("PNNL-Comp-Mass-Spec/TopPICR")
+library (TopPICR)
+```
+
+#### Download necessary files
+
+The files needed to run the TopPICR pipeline can be cloned from this GitHub
+[repo](https://github.com/PNNL-Comp-Mass-Spec/TopPICR_reproducible_code_for_JPR).
+
+
+Create a path to the directory containing the TopPIC output and fasta files.
+NOTE: Be sure to update the path to the cloned repo.
+
+```{r}
+the_path <- "/Users/mart077/Documents/data/cptac/"
+```
+
+#### Read in the identified or MS2 data
+
+```{r}
+ms2 <- read_toppic(
+  file_path = file.path(the_path, "TopPIC_output/"),
+  file_name = c(
+    "CPTAC_Intact_CR32B_24Aug15_Bane_15-02-06-RZ_ms2_toppic_prsm.tsv",
+    "CPTAC_Intact_CR32C_24Aug15_Bane_15-02-06-RZ_ms2_toppic_prsm.tsv",
+    "CPTAC_Intact_CR32D_24Aug15_Bane_15-02-06-RZ_ms2_toppic_prsm.tsv",
+    "CPTAC_Intact_CR32E_24Aug15_Bane_15-02-06-RZ_ms2_toppic_prsm.tsv",
+    "CPTAC_Intact_CR32F_24Aug15_Bane_15-02-06-RZ_ms2_toppic_prsm.tsv",
+    "CPTAC_Intact_CR33B_24Aug15_Bane_15-02-06-RZ_ms2_toppic_prsm.tsv",
+    "CPTAC_Intact_CR33C_24Aug15_Bane_15-02-06-RZ_ms2_toppic_prsm.tsv",
+    "CPTAC_Intact_CR33D_24Aug15_Bane_15-02-06-RZ_ms2_toppic_prsm.tsv",
+    "CPTAC_Intact_CR33E_24Aug15_Bane_15-02-06-RZ_ms2_toppic_prsm.tsv",
+    "CPTAC_Intact_CR33F_24Aug15_Bane_15-02-06-RZ_ms2_toppic_prsm.tsv"
+  ),
+  faims = FALSE
+)
+```
+
+#### Read in the unidentified or MS1 data
+
+```{r}
+ms1 <- read_toppic(
+  file_path = file.path(the_path, "TopPIC_output/"),
+  file_name = c(
+    "CPTAC_Intact_CR32B_24Aug15_Bane_15-02-06-RZ_ms1.feature",
+    "CPTAC_Intact_CR32C_24Aug15_Bane_15-02-06-RZ_ms1.feature",
+    "CPTAC_Intact_CR32D_24Aug15_Bane_15-02-06-RZ_ms1.feature",
+    "CPTAC_Intact_CR32E_24Aug15_Bane_15-02-06-RZ_ms1.feature",
+    "CPTAC_Intact_CR32F_24Aug15_Bane_15-02-06-RZ_ms1.feature",
+    "CPTAC_Intact_CR33B_24Aug15_Bane_15-02-06-RZ_ms1.feature",
+    "CPTAC_Intact_CR33C_24Aug15_Bane_15-02-06-RZ_ms1.feature",
+    "CPTAC_Intact_CR33D_24Aug15_Bane_15-02-06-RZ_ms1.feature",
+    "CPTAC_Intact_CR33E_24Aug15_Bane_15-02-06-RZ_ms1.feature",
+    "CPTAC_Intact_CR33F_24Aug15_Bane_15-02-06-RZ_ms1.feature"
+  ),
+  faims = FALSE
+)
+```
+
+#### Identified feature (MS2) steps
+
+```{r}
+# Remove features that occur across multiple genes. The feature with the lowest
+# E-value is kept.
+ms2_rfg <- rm_false_gene(x = ms2)
+
+# Update information for each proteoform (e.g., parent protein length,
+# first/last amino acid position, and percent coverage of the parent protein).
+ms2_mp <- map_proteoform(
+  x = ms2_rfg,
+  fst_path = file.path(the_path, "FASTA/"),
+  fst_name = "ID_008269_B09DF3DE.fasta.gz"
+)
+
+# Filter proteoforms with low counts.
+ms2_fbc <- filter_by_count(
+  x = ms2_mp,
+  count_within = c("Dataset", "Scan(s)"),
+  count = "cleanSeq",
+  threshold = 2
+)
+
+# Determine an E-value cutoff for each annotation type (SwissProt, VarSplic, and
+# TrEMBL) that results in an FDR below the given threshold.
+the_cutoff <- find_evalue_cutoff(
+  x = ms2_fbc,
+  fdr_threshold = 0.01
+)
+
+# Control the FDR level by applying the E-value cutoff calculated in the
+# previous step.
+ms2_fdr <- apply_evalue_cutoff(
+  x = ms2_fbc,
+  e_vals = the_cutoff
+)
+
+# Infer a minimal set of protein sequences.
+ms2_ipf <- infer_pf(ms2_fdr)
+
+# Determine the proteoform level for each proteoform.
+ms2_pfl <- set_pf_level(ms2_ipf)
+
+# Create a LOESS model for each data set that will be used to align the
+# retention times to a reference data set.
+the_model <- form_model(
+  x = ms2_ipf,
+  ref_ds = find_ref_ds(x = ms2_ipf),
+  control = loess.control(surface = "direct"), # Use direct to avoid NAs.
+  span = 0.5,
+  family = "symmetric"
+)
+
+# Apply the LOESS model to align the retention times from each data set to the
+# reference data set.
+ms2_art <- align_rt(
+  x = ms2_ipf,
+  model = the_model,
+  var_name = "Feature apex"
+)
+
+# Compute the error (difference) between the theoretical and observed mass
+# within each data set and calculate the standard deviation of the error for
+# both the retention time and mass.
+the_error <- calc_error(
+  x = ms2_art,
+  ref_ds = find_ref_ds(x = ms2_ipf)
+)
+
+# Recalibrate the mass using the errors computed in the previous step.
+ms2_rcm <- recalibrate_mass(
+  x = ms2_art,
+  errors = the_error,
+  var_name = "Precursor mass"
+)
+
+# Cluster proteoforms in retention time and mass space.
+ms2_clu <- cluster(
+  x = ms2_rcm,
+  errors = the_error,
+  method = "single",
+  height = 4,
+  min_size = 2
+)
+
+# Group clusters based on cluster centroids and accounting for isotopic errors.
+ms2_grp <- create_pcg(
+  x = ms2_clu,
+  errors = the_error,
+  n_mme_sd = 3.163452,
+  n_Da = 4,
+  n_rt_sd = 3.001538
+)
+
+# Create a data matrix with meta data for each proteoform. This will be used as
+# the featureData object when creating an MSnSet object at the end of the
+# pipeline.
+meta <- create_mdata(
+  x = ms2_grp,
+  errors = the_error,
+  n_mme_sd = 3.163452,
+  n_rt_sd = 3.001538
+)
+```
+
+#### Unidentified feature (MS1) steps
+
+```{r}
+# Align the unidentified feature retention times using the model created with
+# the identified feature retention times.
+ms1_art <- align_rt(
+  x = ms1,
+  model = the_model,
+  var_name = "Time_apex"
+)
+
+# Recalibrate the unidentified feature masses using the mass measurement errors
+# calculated from the identified feature masses.
+ms1_rcm <- recalibrate_mass(
+  x = ms1_art,
+  errors = the_error,
+  var_name = "Mass"
+)
+
+# Recover unidentified features. This step matches unidentified features with
+# cluster groups based on an envelope around each cluster centroid.
+ms1_ms2 <- match_features(
+  ms2 = ms2_grp,
+  ms1 = ms1_rcm,
+  errors = the_error,
+  n_mme_sd = 3.163452,
+  n_rt_sd = 3.001538,
+  summary_fn = "max"
+)
+```
+
+#### Create MSnSet object
+
+```{r}
+# Combine the expression data (ms1_ms2) with the feature data (meta) to create
+# an MSnSet object.
+m <- to_msnset(ms1_ms2, meta)
+```
+
+#### Run statistical analysis
+
+```{r}
+m0 <- m
+
+# preprocessing and normalization
+exprs(m) <- log2(exprs(m))
+exprs(m) <- sweep(exprs(m), 1, apply(exprs(m), 1, median, na.rm=T), FUN="-")
+
+m <- normalizeByGlob(m)
+
+m <- normalize_by_feature_property(m, property = "rt", method = "loess")
+
+sum(is.na(exprs(m)))/(nrow(m) * ncol(m))
+
+# add group variable to pData
+p_data <- data.frame(sample_name = sampleNames(m),
+                     row.names = sampleNames(m))
+
+p_data <- p_data %>%
+  mutate(group = sub("(CR3[23]).", "\\1", sample_name))
+
+pData(m) <- p_data
+
+res <- limma_a_b(m, "~ group", "group")
+
+table(res$adj.P.Val < 0.05) # 1291 significant
+
+res <- res %>%
+  mutate(point_color = case_when(
+    adj.P.Val < 0.05 & logFC < 0 ~ "down", # significantly down
+    adj.P.Val < 0.05 & logFC > 0 ~ "up", # significantly up
+    TRUE ~ "NS") # not significant
+  )
+```
+
+#### Code to reproduce figures
+
+##### Figure 2a
+
+```{r echo=FALSE,fig.show="hold"}
+ds_names <- names(the_model)
+
+# We use CPTAC_Intact_CR33C_24Aug15_Bane_15-02-06-RZ (the seventh data set in
+# ds_names) because it deviated the most from the reference.
+cur_ds <- 7
+
+# Find the corresponding aligned retention times -------------------------------
+
+# Grab the reference and current data sets. This will be used to find the
+# proteoforms that occur in both the reference data set (CR32C) and the current
+# data set (CR33C).
+ref_ds <- find_ref_ds(ms2_art)
+cur_ds <- ds_names[[cur_ds]]
+
+# Subset the original data set into the reference and current data sets.
+x_ref <- ms2_ipf %>%
+  filter(Dataset == ref_ds) %>%
+  dplyr::distinct(`Feature intensity`, `Feature apex`, Proteoform) %>%
+  dplyr::group_by(Proteoform) %>%
+  dplyr::slice_max(`Feature intensity`) %>%
+  dplyr::slice_min(`Feature apex`)
+x_cur <- ms2_art %>%
+  filter(Dataset == cur_ds) %>%
+  dplyr::distinct(
+    `Feature intensity`, `Feature apex`, Proteoform, RTalign
+  ) %>%
+  dplyr::group_by(Proteoform) %>%
+  dplyr::slice_max(`Feature intensity`) %>%
+  dplyr::slice_min(`Feature apex`)
+
+# Find the proteoforms that occur in both CR32C and CR33C. This vector will be
+# used to subset the aligned retention times from the current data matrix.
+both <- intersect(x_ref$Proteoform, x_cur$Proteoform)
+
+# Extract the indices where the intersecting Proteoforms occur in both the
+# reference data set and the current data set.
+idx_ref <- which(x_ref$Proteoform %in% both)
+idx_cur <- which(x_cur$Proteoform %in% both)
+
+aligned <- x_cur$RTalign[idx_cur]
+
+# Plot the RTalign against the residuals from the model ------------------------
+
+z <- data.frame(
+  reference = x_ref$`Feature apex`[idx_ref],
+  current = x_cur$`Feature apex`[idx_cur]
+)
+
+z$predicted <- predict(the_model[[cur_ds]], newdata = z$current)
+z$predicted_line <- z$predicted - z$current
+
+ggplot(
+  z,
+  aes(x = current, y = reference - current)
+) +
+  geom_point() +
+  theme_bw() +
+  theme(panel.border = element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text = element_text(size = 16),
+        strip.background = element_rect(colour = "white",
+                                        fill = "white")) +
+  scale_x_continuous(expand = c(0, 0), limits = c(0, 8417)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-472, 200)) +
+  geom_hline(yintercept = 0, color = "black", size = 0.3) +
+  geom_line(aes(y = predicted_line),
+            color = "red",
+            size = 1) +
+  xlab("") +
+  ylab("")
+```
+
+##### Figure 2b
+
+```{r echo=FALSE,fig.show="hold"}
+# PPM error --------------------------------------------------------------------
+
+# Only plot CR33C to match the rt alignment plot.
+ms2_rcm %>%
+  dplyr::mutate(
+    split_dataset = str_split(Dataset, "_"),
+    Dataset = map(split_dataset, `[[`, 3),
+    Dataset = as.character(Dataset),
+    ppm_error = 1e6 * (`Precursor mass` - `Adjusted precursor mass`) /
+      `Adjusted precursor mass`
+  ) %>%
+  filter(Dataset == "CR33C") %>%
+  ggplot(aes(x = ppm_error)) +
+  geom_histogram(bins = 72) +
+  xlim(c(-15, 15)) +
+  xlab("Parts per million") +
+  ylab("Count") +
+  theme_bw() +
+  theme(panel.border = element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text = element_text(size = 14),
+        strip.background = element_rect(colour = "white",
+                                        fill = "white")) +
+  scale_y_continuous(expand = c(0, 0)) +
+  xlab("") +
+  ylab("")
+```
+
+##### Figure 2c
+
+```{r echo=FALSE,fig.show="hold"}
+# Create deviation boxplots ----------------------------------------------------
+
+short_names <- c(
+  "CR32B", "CR32C", "CR32D", "CR32E", "CR32F",
+  "CR33B", "CR33C", "CR33D", "CR33E", "CR33F"
+)
+
+# Create a list that will hold the reference, current, predicted (aligned), and
+# smoothed (predicted line) values.
+z <- vector(mode = "list",
+            length = length(ds_names))
+
+# Grab the name of the reference data set.
+ref_ds <- find_ref_ds(ms2_art)
+
+# Loop through each data set and fill in the retention time values.
+for (e in 1:length(ds_names)) {
+
+  cur_ds <- ds_names[[e]]
+
+  # Subset the original data set into the reference and current data sets.
+  x_ref <- ms2_ipf %>%
+    filter(Dataset == ref_ds) %>%
+    dplyr::distinct(`Feature intensity`, `Feature apex`, Proteoform) %>%
+    dplyr::group_by(Proteoform) %>%
+    dplyr::slice_max(`Feature intensity`) %>%
+    dplyr::slice_min(`Feature apex`)
+  x_cur <- ms2_art %>%
+    filter(Dataset == cur_ds) %>%
+    dplyr::distinct(
+      `Feature intensity`, `Feature apex`, Proteoform, RTalign
+    ) %>%
+    dplyr::group_by(Proteoform) %>%
+    dplyr::slice_max(`Feature intensity`) %>%
+    dplyr::slice_min(`Feature apex`)
+
+  # Find the proteoforms that occur in both CR32C and CR33C. This vector will be
+  # used to subset the aligned retention times from the current data matrix.
+  both <- intersect(x_ref$Proteoform, x_cur$Proteoform)
+
+  # Extract the indices where the intersecting Proteoforms occur in both the
+  # reference data set and the current data set.
+  idx_ref <- which(x_ref$Proteoform %in% both)
+  idx_cur <- which(x_cur$Proteoform %in% both)
+
+  aligned <- x_cur$RTalign[idx_cur]
+
+  temp <- data.frame(
+    reference = x_ref$`Feature apex`[idx_ref],
+    current = x_cur$`Feature apex`[idx_cur],
+    dataset = short_names[[e]]
+  )
+
+  temp$predicted <- predict(the_model[[cur_ds]], newdata = temp$current)
+  temp$deviation_before <- temp$reference - temp$current
+  temp$deviation_after <- temp$reference - temp$predicted
+
+  z[[e]] <- temp
+
+}
+
+big_z <- data.table::rbindlist(z) %>%
+  as.data.frame()
+
+before_z <- big_z[, c("dataset", "deviation_before")]
+before_z$when <- "Before Alignment"
+names(before_z)[2] <- "deviation"
+after_z <- big_z[, c("dataset", "deviation_after")]
+after_z$when <- "After Alignment"
+names(after_z)[2] <- "deviation"
+
+tall_z <- rbind(before_z, after_z)
+tall_z$when <- factor(tall_z$when,
+                      levels = c("Before Alignment",
+                                 "After Alignment"))
+
+# Remove anything from the reference data set because we do not want it plotted.
+tall_z$deviation[which(tall_z$dataset == "CR32C")] <- NA
+
+ggplot(tall_z,
+       aes(x = dataset, y = deviation)) +
+  geom_boxplot(outlier.shape = NA) +
+  coord_cartesian(ylim = c(-385, 385)) +
+  facet_wrap(~when) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.text = element_text(size = 13),
+        strip.text.x = element_blank()) +
+  xlab("") +
+  ylab("")
+```
+
+##### Figure 2D
+
+```{r echo=FALSE,fig.show="hold"}
+# Create before/after ppm error box plots --------------------------------------
+
+before <- ms2_rcm %>%
+  dplyr::filter(`#unexpected modifications` == 0) %>%
+  dplyr::filter(abs(`Precursor mass` - `Adjusted precursor mass`) < 0.5) %>%
+  dplyr::mutate(
+    split_dataset = str_split(Dataset, "_"),
+    Dataset = map(split_dataset, `[[`, 3),
+    Dataset = as.character(Dataset),
+    ppm_error = 1e6 * (`Precursor mass` - `Adjusted precursor mass`) /
+      `Adjusted precursor mass`,
+    when = "Before Recalibration"
+  ) %>%
+  select(Dataset, ppm_error, when)
+
+after <- ms2_rcm %>%
+  dplyr::filter(`#unexpected modifications` == 0) %>%
+  dplyr::filter(abs(`Precursor mass` - `Adjusted precursor mass`) < 0.5) %>%
+  dplyr::mutate(
+    split_dataset = str_split(Dataset, "_"),
+    Dataset = map(split_dataset, `[[`, 3),
+    Dataset = as.character(Dataset),
+    ppm_error = 1e6 * (RecalMass - `Adjusted precursor mass`) /
+      `Adjusted precursor mass`,
+    when = "After Recalibration"
+  ) %>%
+  select(Dataset, ppm_error, when)
+
+both <- rbind(before, after)
+
+both$when <- factor(both$when,
+                    levels = c("Before Recalibration",
+                               "After Recalibration"))
+
+ggplot(both,
+       aes(x = Dataset, y = ppm_error)) +
+  geom_boxplot(outlier.shape = NA) +
+  coord_cartesian(ylim = c(-11, 11)) +
+  facet_wrap(~when) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        axis.text = element_text(size = 13),
+        strip.text.x = element_blank()) +
+  xlab("") +
+  ylab("")
+```
+
+##### Figure 3a
+
+```{r echo=FALSE,fig.show="hold"}
+# Cluster: GAPDH ---------------------------------------------------------------
+
+# Extract the gene in question.
+x_gene <- ms2_grp %>%
+  filter(Gene == "GAPDH")
+
+ggplot(data = x_gene,
+       aes(x = RTalign,
+           y = RecalMass,
+           color = as.character(cluster))) +
+    geom_point() +
+  theme_bw() +
+    theme(panel.border = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_text(size = 14),
+        strip.background = element_rect(colour = "white",
+                                        fill = "white"),
+        legend.position = "none") +
+  scale_x_continuous(expand = c(0, 0), limits = c(650, 9220)) +
+  xlab("") +
+  ylab("") +
+  scale_color_manual(
+    values = TopPICR:::turbo(n = length(unique(x_gene$cluster)))
+  )
+```
+
+##### Figure 3b
+
+```{r echo=FALSE,fig.show="hold"}
+ggplot(data = x_gene,
+       aes(x = RTalign,
+           y = RecalMass,
+           color = as.character(cluster))) +
+    geom_point() +
+  theme_bw() +
+    theme(panel.border = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_text(size = 14),
+        strip.background = element_rect(colour = "white",
+                                        fill = "white"),
+        legend.position = "none") +
+  scale_x_continuous(expand = c(0, 0), limits = c(4525, 5000)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(3750, 7700)) +
+  xlab("") +
+  ylab("") +
+  scale_color_manual(
+    values = TopPICR:::turbo(n = length(unique(x_gene$cluster)))
+  )
+```
+
+##### Figure 3c
+
+```{r echo=FALSE,fig.show="hold"}
+ggplot(data = x_gene,
+       aes(x = RTalign,
+           y = RecalMass,
+           color = as.character(pcGroup))) +
+    geom_point() +
+  theme_bw() +
+    theme(panel.border = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_text(size = 14),
+        strip.background = element_rect(colour = "white",
+                                        fill = "white"),
+        legend.position = "none") +
+  scale_x_continuous(expand = c(0, 0), limits = c(4525, 5000)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(3750, 7700)) +
+  xlab("") +
+  ylab("") +
+  scale_color_manual(
+    values = TopPICR:::turbo(n = length(unique(x_gene$pcGroup)))
+  )
+```
+
+##### Figure 3d
+
+```{r echo=FALSE,fig.show="hold"}
+ggplot(data = x_gene,
+       aes(x = RTalign,
+           y = RecalMass,
+           color = as.character(cluster))) +
+    geom_point() +
+  theme_bw() +
+    theme(panel.border = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_text(size = 14),
+        strip.background = element_rect(colour = "white",
+                                        fill = "white"),
+        legend.position = "none") +
+  scale_x_continuous(expand = c(0, 0), limits = c(4600, 4665)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(4898.47, 4901.47)) +
+  xlab("") +
+  ylab("") +
+  scale_color_manual(
+    values = TopPICR:::turbo(n = length(unique(x_gene$cluster)))
+  )
+```
+
+##### Figure 3e
+
+```{r echo=FALSE,fig.show="hold"}
+ggplot(data = x_gene,
+       aes(x = RTalign,
+           y = RecalMass,
+           color = as.character(cluster))) +
+    geom_point() +
+  theme_bw() +
+    theme(panel.border = element_blank(),
+        axis.line = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_text(size = 14),
+        strip.background = element_rect(colour = "white",
+                                        fill = "white"),
+        legend.position = "none") +
+  scale_x_continuous(expand = c(0, 0), limits = c(4800, 4870)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(4541.474, 4544.474)) +
+  xlab("") +
+  ylab("") +
+  scale_color_manual(
+    values = TopPICR:::turbo(n = length(unique(x_gene$cluster)))
+  )
+```
+
+##### Figure 4
+
+```{r}
+ms2_pfl %>%
+  group_by(`Proteoform Level`) %>%
+  add_count(name = "n") %>%
+  distinct(`Proteoform Level`, n) %>%
+  ungroup() %>%
+  mutate(total = sum(n)) %>%
+  group_by(`Proteoform Level`) %>%
+  mutate(Percentage = n/total*100) %>%
+  ggplot() +
+  aes(x = fct_relevel(`Proteoform Level`, "1", "2A","2B", "2D", "3A",
+                      "3D", "3E", "4A", "4B", "5"),
+      y = Percentage
+  ) +
+  geom_bar(stat = "identity",
+           show.legend = FALSE,
+           size = 1,
+           fill = "white",
+           color = "black") +
+  theme_bw(base_size = 20) +
+  theme(panel.background = element_rect(fill= 'white'),
+        axis.text.y = element_text(color = 'black', size = 20),
+        axis.text.x = element_text(angle = 0,
+                                   vjust = 0.5,
+                                   hjust = 0.5,
+                                   color = 'black',
+                                   size = 20),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        text = element_text(family = "Helvetica")) +
+  ylab("% PrSMs") +
+  xlab("Proteoform Level")
+```
+
+##### Figure 5
+
+```{r echo=FALSE,fig.show="hold"}
+uni_top <- create_mod_data(
+  mod_file = "TopPIC_Variable_Mods.txt",
+  mod_path = file.path(the_path, "TopPIC_output/")
+)
+
+x_mods <- add_mods(x = meta,
+                   mods = uni_top,
+                   nterm_tol = 3,
+                   acetyl_id = "Acetyl",
+                   centroid_tol = 0.57,
+                   matching_tol = 0.1)
+
+plot_accession_ptm(x = x_mods,
+                   accession = "P04406",
+                   mods_to_name = "top10",
+                   aa_step = 20)
+```
+
+##### Figure 6a
+
+```{r echo=FALSE,fig.show="hold"}
+exprs(m0) <- log2(exprs(m0))
+complex_heatmap(
+  m0,
+  heatmap_type = "sample",
+  cluster_columns = F,
+  cluster_rows = F,
+  heatmap_args = list(
+    col = circlize::colorRamp2(
+      breaks = seq(0.4, 1, length.out = 100),
+                               colors = MSnSet.utils::hot.colors(100)
+    ),
+    heatmap_legend_param = list(
+      legend_height = unit(150, "mm"),
+                                legend_width = unit(20, "mm"),
+                                at = seq(0.4, 1, length.out = 7)
+    )
+  )
+)
+```
+
+##### Figure 6b
+
+```{r echo=FALSE,fig.show="hold"}
+plot_pca(
+  m,
+  phenotype = "group",
+  legend_title = "group",
+  show_ellipse = F,
+  size = 4,
+  standardize = F
+) +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 14)
+  ) +
+  xlim(-40, 40) +
+  ylim(-40, 40) +
+  xlab("") +
+  ylab("")
+```
+
+##### Figure 6c
+
+```{r echo=FALSE,fig.show="hold"}
+plot_volcano(
+  res,
+  logFC = "logFC",
+  pvals = "adj.P.Val",
+  sig_threshold = 0.05,
+  point_args = list(mapping = aes(color = point_color))
+) +
+  xlim(-10, 10) +
+  scale_color_manual(
+    values = c("#5555ff", "red3", "lightgrey"),
+    breaks = c("down", "up", "NS")
+  ) +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 14),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank()
+  )
+```
+
+#### Code to reproduce tables
+
+##### Table 1
+
+```{r,results='markup'}
+# Count unique PrSMs, proteoforms, and genes -----------------------------------
+
+# Count: map_proteofor) ---------------
+
+# Count the number of unique PrSMs.
+ms2_mp %>%
+  distinct(Dataset, `Scan(s)`) %>%
+  nrow()
+
+# Count the number of unique proteoforms.
+ms2_mp %>%
+  distinct(Proteoform) %>%
+  nrow()
+
+# Count the number of unique clean sequences.
+ms2_mp %>%
+  distinct(cleanSeq) %>%
+  nrow()
+
+# Count the number of unique genes.
+ms2_mp %>%
+  distinct(Gene) %>%
+  nrow()
+
+# Count: filter_by_count ---------------
+
+# Count the number of unique PrSMs.
+ms2_fbc %>%
+  distinct(Dataset, `Scan(s)`) %>%
+  nrow()
+
+# Count the number of unique proteoforms.
+ms2_fbc %>%
+  distinct(Proteoform) %>%
+  nrow()
+
+# Count the number of unique clean sequences.
+ms2_fbc %>%
+  distinct(cleanSeq) %>%
+  nrow()
+
+# Count the number of unique genes.
+ms2_fbc %>%
+  distinct(Gene) %>%
+  nrow()
+
+# Count: apply_evalue_cutoff ---------------
+
+# Count the number of unique PrSMs.
+ms2_fdr %>%
+  distinct(Dataset, `Scan(s)`) %>%
+  nrow()
+
+# Count the number of unique proteoforms.
+ms2_fdr %>%
+  distinct(Proteoform) %>%
+  nrow()
+
+# Count the number of unique clean sequences.
+ms2_fdr %>%
+  distinct(cleanSeq) %>%
+  nrow()
+
+# Count the number of unique genes.
+ms2_fdr %>%
+  distinct(Gene) %>%
+  nrow()
+
+# Count: infer_pf ---------------
+
+# Count the number of unique PrSMs.
+ms2_ipf %>%
+  distinct(Dataset, `Scan(s)`) %>%
+  nrow()
+
+# Count the number of unique proteoforms.
+ms2_ipf %>%
+  distinct(Proteoform) %>%
+  nrow()
+
+# Count the number of unique clean sequences.
+ms2_ipf %>%
+  distinct(cleanSeq) %>%
+  nrow()
+
+# Count the number of unique genes.
+ms2_ipf %>%
+  distinct(Gene) %>%
+  nrow()
+
+# Count: cluster ---------------
+
+# Count the number of unique PrSMs.
+ms2_clu %>%
+  filter(cluster != 0) %>%
+  distinct(Dataset, `Scan(s)`) %>%
+  nrow()
+
+# Count the number of unique proteoforms.
+ms2_clu %>%
+  filter(cluster != 0) %>%
+  distinct(Gene, cluster) %>%
+  nrow()
+
+# Count the number of unique clean sequences.
+ms2_clu %>%
+  filter(cluster != 0) %>%
+  distinct(cleanSeq) %>%
+  nrow()
+
+# Count the number of unique genes.
+ms2_clu %>%
+  filter(cluster != 0) %>%
+  distinct(Gene) %>%
+  nrow()
+
+# Count: group clusters ---------------
+
+# Count the number of unique PrSMs.
+ms2_grp %>%
+  distinct(Dataset, `Scan(s)`) %>%
+  nrow()
+
+# Count the number of unique proteoforms.
+ms2_grp %>%
+  distinct(Gene, pcGroup) %>%
+  nrow()
+
+# Count the number of unique clean sequences.
+ms2_grp %>%
+  distinct(cleanSeq) %>%
+  nrow()
+
+# Count the number of unique genes.
+ms2_grp %>%
+  distinct(Gene) %>%
+  nrow()
+
+# Compute FDR ------------------------------------------------------------------
+
+# NOTE: The counts from the compute_fdr function will be different from the
+# counts above because it only counts the number of non-decoy hits. Whereas the
+# counts from above include both non-decoy and decoy hits.
+#
+# NOTE: We do not include the counts or FDR at the accession level.
+
+compute_fdr(ms2_mp)
+compute_fdr(ms2_fbc)
+compute_fdr(ms2_fdr)
+compute_fdr(ms2_ipf)
+# For the following two lines we don't use the Proteoform FDR because the
+# definition of a proteoform changes to Gene_cluster and Gene_pcGroup
+# respectively.
+compute_fdr(filter(ms2_clu, cluster != 0))
+compute_fdr(ms2_grp)
+
+# Proteoform (Gene_cluster) FDR.
+ms2_clu %>%
+  filter(cluster != 0) %>%
+  distinct(Gene, cluster, isDecoy) %>%
+  summarize(fdr = mean(isDecoy)) %>%
+  pull(fdr) * 100
+
+# Proteoform (Gene_pcGroup) FDR.
+ms2_grp %>%
+  distinct(Gene, pcGroup, isDecoy) %>%
+  summarize(fdr = mean(isDecoy)) %>%
+  pull(fdr) * 100
+```
+
+##### Proportion of missing data
+
+The following code calculates the proportion of missing data with and without the MBR step.
+
+```{r,results='markup'}
+# To create an msnset object there can only be one feature intensity value.
+# Remove extras by taking the maximum across Dataset, CV, Gene, and pcGroup.
+x_grp <- ms2_grp %>%
+  group_by(Dataset, CV, Gene, pcGroup) %>%
+  summarize(
+    Intensity = max(`Feature intensity`, na.rm = TRUE)
+  )
+
+# Create an msnset object with the data prior to the MBR step. We will use this
+# to compare the amount of missing data the MBR step reduces.
+m_no_mbr <- to_msnset(x_grp, meta)
+
+# Compute the proportion of missing data WITHOUT the MBR step.
+sum(is.na(exprs(m_no_mbr))) / prod(dim(exprs(m_no_mbr))) * 100
+
+# Compute the proportion of missing data WITH the MBR step.
+sum(is.na(exprs(m0))) / prod(dim(exprs(m0))) * 100
+```
