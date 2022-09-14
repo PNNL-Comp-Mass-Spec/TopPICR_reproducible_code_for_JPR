@@ -1,6 +1,12 @@
 ---
-title: ''
-output: html_document
+title: 'Code for JPR'
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+    theme: cerulean
+    code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
@@ -13,11 +19,8 @@ knitr::opts_chunk$set(
 )
 ```
 
-#### Load R libraries
-
-You will need the following libraries: MSnSet.utils, plotly, tidyverse, and TopPICR.
-
 ```{r include=FALSE}
+# Load R libraries -------------------------------------------------------------
 # To download the most recent version of MSnSet.utils:
 # devtools::install_github("PNNL-Comp-Mass-Spec/MSnSet.utils")
 library (MSnSet.utils)
@@ -28,22 +31,19 @@ library (tidyverse)
 library (TopPICR)
 ```
 
-#### Download necessary files
+# Download necessary files
 
 The files needed to run the TopPICR pipeline can be cloned from this GitHub
 [repo](https://github.com/PNNL-Comp-Mass-Spec/TopPICR_reproducible_code_for_JPR).
 
-
-Create a path to the directory containing the TopPIC output and fasta files.
-NOTE: Be sure to update the path to the cloned repo.
-
 ```{r}
-the_path <- "/Users/mart077/Documents/data/cptac/"
-```
+# Read in the identified or MS2 data -------------------------------------------
 
-#### Read in the identified or MS2 data
+# NOTE: Be sure to update the path to the cloned repo by changing the working
+# directory in the R session or by updating the path object (the_path).
 
-```{r}
+the_path <- "."
+
 ms2 <- read_toppic(
   file_path = file.path(the_path, "TopPIC_output/"),
   file_name = c(
@@ -60,11 +60,9 @@ ms2 <- read_toppic(
   ),
   faims = FALSE
 )
-```
 
-#### Read in the unidentified or MS1 data
+# Read in the unidentified or MS1 data -----------------------------------------
 
-```{r}
 ms1 <- read_toppic(
   file_path = file.path(the_path, "TopPIC_output/"),
   file_name = c(
@@ -83,9 +81,9 @@ ms1 <- read_toppic(
 )
 ```
 
-#### Identified feature (MS2) steps
-
 ```{r}
+# Identified feature (MS2) steps -----------------------------------------------
+
 # Remove features that occur across multiple genes. The feature with the lowest
 # E-value is kept.
 ms2_rfg <- rm_false_gene(x = ms2)
@@ -188,9 +186,9 @@ meta <- create_mdata(
 )
 ```
 
-#### Unidentified feature (MS1) steps
-
 ```{r}
+# Unidentified feature (MS1) steps ---------------------------------------------
+
 # Align the unidentified feature retention times using the model created with
 # the identified feature retention times.
 ms1_art <- align_rt(
@@ -219,17 +217,16 @@ ms1_ms2 <- match_features(
 )
 ```
 
-#### Create MSnSet object
-
 ```{r}
+# Create MSnSet object ---------------------------------------------------------
+
 # Combine the expression data (ms1_ms2) with the feature data (meta) to create
 # an MSnSet object.
 m <- to_msnset(ms1_ms2, meta)
 ```
 
-#### Run statistical analysis
-
 ```{r}
+# Run statistical analysis -----------------------------------------------------
 m0 <- m
 
 # preprocessing and normalization
@@ -263,11 +260,11 @@ res <- res %>%
   )
 ```
 
-#### Code to reproduce figures
+# Code to reproduce figures
 
-##### Figure 2a
+## Figure 2a
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 ds_names <- names(the_model)
 
 # We use CPTAC_Intact_CR33C_24Aug15_Bane_15-02-06-RZ (the seventh data set in
@@ -340,9 +337,9 @@ ggplot(
   ylab("")
 ```
 
-##### Figure 2b
+## Figure 2b
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 # PPM error --------------------------------------------------------------------
 
 # Only plot CR33C to match the rt alignment plot.
@@ -371,9 +368,9 @@ ms2_rcm %>%
   ylab("")
 ```
 
-##### Figure 2c
+## Figure 2c
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 # Create deviation boxplots ----------------------------------------------------
 
 short_names <- c(
@@ -467,9 +464,9 @@ ggplot(tall_z,
   ylab("")
 ```
 
-##### Figure 2D
+## Figure 2D
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 # Create before/after ppm error box plots --------------------------------------
 
 before <- ms2_rcm %>%
@@ -518,9 +515,9 @@ ggplot(both,
   ylab("")
 ```
 
-##### Figure 3a
+## Figure 3a
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 # Cluster: GAPDH ---------------------------------------------------------------
 
 # Extract the gene in question.
@@ -548,9 +545,9 @@ ggplot(data = x_gene,
   )
 ```
 
-##### Figure 3b
+## Figure 3b
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 ggplot(data = x_gene,
        aes(x = RTalign,
            y = RecalMass,
@@ -573,9 +570,9 @@ ggplot(data = x_gene,
   )
 ```
 
-##### Figure 3c
+## Figure 3c
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 ggplot(data = x_gene,
        aes(x = RTalign,
            y = RecalMass,
@@ -598,9 +595,9 @@ ggplot(data = x_gene,
   )
 ```
 
-##### Figure 3d
+## Figure 3d
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 ggplot(data = x_gene,
        aes(x = RTalign,
            y = RecalMass,
@@ -623,9 +620,9 @@ ggplot(data = x_gene,
   )
 ```
 
-##### Figure 3e
+## Figure 3e
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 ggplot(data = x_gene,
        aes(x = RTalign,
            y = RecalMass,
@@ -648,7 +645,7 @@ ggplot(data = x_gene,
   )
 ```
 
-##### Figure 4
+## Figure 4
 
 ```{r}
 ms2_pfl %>%
@@ -686,9 +683,9 @@ ms2_pfl %>%
   xlab("Proteoform Level")
 ```
 
-##### Figure 5
+## Figure 5
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 uni_top <- create_mod_data(
   mod_file = "TopPIC_Variable_Mods.txt",
   mod_path = file.path(the_path, "TopPIC_output/")
@@ -707,9 +704,9 @@ plot_accession_ptm(x = x_mods,
                    aa_step = 20)
 ```
 
-##### Figure 6a
+## Figure 6a
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 exprs(m0) <- log2(exprs(m0))
 complex_heatmap(
   m0,
@@ -730,9 +727,9 @@ complex_heatmap(
 )
 ```
 
-##### Figure 6b
+## Figure 6b
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 plot_pca(
   m,
   phenotype = "group",
@@ -751,9 +748,9 @@ plot_pca(
   ylab("")
 ```
 
-##### Figure 6c
+## Figure 6c
 
-```{r echo=FALSE,fig.show="hold"}
+```{r}
 plot_volcano(
   res,
   logFC = "logFC",
@@ -774,148 +771,170 @@ plot_volcano(
   )
 ```
 
-#### Code to reproduce tables
+# Code to reproduce tables
 
-##### Table 1
+## Table 1 counts
 
-```{r,results='markup'}
+```{r}
 # Count unique PrSMs, proteoforms, and genes -----------------------------------
 
-# Count: map_proteofor) ---------------
+# Count: no filter ---------------
 
+count_mp <- c(
 # Count the number of unique PrSMs.
 ms2_mp %>%
   distinct(Dataset, `Scan(s)`) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique proteoforms.
 ms2_mp %>%
   distinct(Proteoform) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique clean sequences.
 ms2_mp %>%
   distinct(cleanSeq) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique genes.
 ms2_mp %>%
   distinct(Gene) %>%
   nrow()
+)
 
-# Count: filter_by_count ---------------
+# Count: occurrence filter ---------------
 
+count_fbc <- c(
 # Count the number of unique PrSMs.
 ms2_fbc %>%
   distinct(Dataset, `Scan(s)`) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique proteoforms.
 ms2_fbc %>%
   distinct(Proteoform) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique clean sequences.
 ms2_fbc %>%
   distinct(cleanSeq) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique genes.
 ms2_fbc %>%
   distinct(Gene) %>%
   nrow()
+)
 
-# Count: apply_evalue_cutoff ---------------
+# Count: E-value cutoff filter ---------------
 
+count_fdr <- c(
 # Count the number of unique PrSMs.
 ms2_fdr %>%
   distinct(Dataset, `Scan(s)`) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique proteoforms.
 ms2_fdr %>%
   distinct(Proteoform) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique clean sequences.
 ms2_fdr %>%
   distinct(cleanSeq) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique genes.
 ms2_fdr %>%
   distinct(Gene) %>%
   nrow()
+)
 
-# Count: infer_pf ---------------
+# Count: proteoform inference ---------------
 
+count_ipf <- c(
 # Count the number of unique PrSMs.
 ms2_ipf %>%
   distinct(Dataset, `Scan(s)`) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique proteoforms.
 ms2_ipf %>%
   distinct(Proteoform) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique clean sequences.
 ms2_ipf %>%
   distinct(cleanSeq) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique genes.
 ms2_ipf %>%
   distinct(Gene) %>%
   nrow()
+)
 
 # Count: cluster ---------------
 
+count_clu <- c(
 # Count the number of unique PrSMs.
 ms2_clu %>%
   filter(cluster != 0) %>%
   distinct(Dataset, `Scan(s)`) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique proteoforms.
 ms2_clu %>%
   filter(cluster != 0) %>%
   distinct(Gene, cluster) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique clean sequences.
 ms2_clu %>%
   filter(cluster != 0) %>%
   distinct(cleanSeq) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique genes.
 ms2_clu %>%
   filter(cluster != 0) %>%
   distinct(Gene) %>%
   nrow()
+)
 
-# Count: group clusters ---------------
+# Count: cluster groups ---------------
 
+count_grp <- c(
 # Count the number of unique PrSMs.
 ms2_grp %>%
   distinct(Dataset, `Scan(s)`) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique proteoforms.
 ms2_grp %>%
   distinct(Gene, pcGroup) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique clean sequences.
 ms2_grp %>%
   distinct(cleanSeq) %>%
-  nrow()
-
+  nrow(),
 # Count the number of unique genes.
 ms2_grp %>%
   distinct(Gene) %>%
   nrow()
+)
+
+# Create a data frame with counts that can be passed to the kable function.
+table_counts <- data.frame(
+  `No filter` = count_mp,
+  `Occurrence filter` = count_fbc,
+  `E-value filter` = count_fdr,
+  Inference = count_ipf,
+  Cluster = count_clu,
+  `Isotopologue cluster` = count_grp,
+  check.names = FALSE
+) %>%
+  `rownames<-`(c("PrSM", "Proteoform", "AA sequence", "Gene"))
+
+# Produce a latex table with a booktabs format for the Table 1 counts.
+# knitr::kable(table_counts)
+```
+
+|            | No filter| Occurrence filter| E-value filter| Inference| Cluster| Isotopologue cluster|
+|:-----------|---------:|-----------------:|--------------:|---------:|-------:|--------------------:|
+|PrSM        |     23136|             21697|          21647|     21610|   20980|                20980|
+|Proteoform  |      6878|              5439|           5419|      5419|    2705|                 2451|
+|AA sequence |      3679|              2240|           2225|      2225|    2158|                 2158|
+|Gene        |      1482|               908|            893|       556|     527|                  527|
+
+## Table 1 FDR
+
+```{r}
+options(knitr.table.format = "latex")
 
 # Compute FDR ------------------------------------------------------------------
 
@@ -925,35 +944,62 @@ ms2_grp %>%
 #
 # NOTE: We do not include the counts or FDR at the accession level.
 
-compute_fdr(ms2_mp)
-compute_fdr(ms2_fbc)
-compute_fdr(ms2_fdr)
-compute_fdr(ms2_ipf)
+fdr_mp <- compute_fdr(ms2_mp)
+fdr_fbc <- compute_fdr(ms2_fbc)
+fdr_fdr <- compute_fdr(ms2_fdr)
+fdr_ipf <- compute_fdr(ms2_ipf)
 # For the following two lines we don't use the Proteoform FDR because the
 # definition of a proteoform changes to Gene_cluster and Gene_pcGroup
 # respectively.
-compute_fdr(filter(ms2_clu, cluster != 0))
-compute_fdr(ms2_grp)
+fdr_clu <- compute_fdr(filter(ms2_clu, cluster != 0))
+fdr_grp <- compute_fdr(ms2_grp)
 
 # Proteoform (Gene_cluster) FDR.
-ms2_clu %>%
+fdr_clu_pf <- ms2_clu %>%
   filter(cluster != 0) %>%
   distinct(Gene, cluster, isDecoy) %>%
   summarize(fdr = mean(isDecoy)) %>%
   pull(fdr) * 100
 
 # Proteoform (Gene_pcGroup) FDR.
-ms2_grp %>%
+fdr_grp_pf <- ms2_grp %>%
   distinct(Gene, pcGroup, isDecoy) %>%
   summarize(fdr = mean(isDecoy)) %>%
   pull(fdr) * 100
+
+# Create a data frame with FDR values that can be passed to the kable function.
+table_fdr <- data.frame(
+  `No filter` = unname(unlist(lapply(fdr_mp, `[[`, 1)))[c(1:3, 5)],
+  `Occurrence filter` = unname(unlist(lapply(fdr_fbc, `[[`, 1)))[c(1:3, 5)],
+  `E-value filter` = unname(unlist(lapply(fdr_fdr, `[[`, 1)))[c(1:3, 5)],
+  Inference = unname(unlist(lapply(fdr_ipf, `[[`, 1)))[c(1:3, 5)],
+  Cluster = c(
+    unname(unlist(lapply(fdr_clu, `[[`, 1)))[1],
+    fdr_clu_pf,
+    unname(unlist(lapply(fdr_clu, `[[`, 1)))[c(3, 5)]
+  ),
+  `Isotopologue cluster` = c(
+    unname(unlist(lapply(fdr_grp, `[[`, 1)))[1],
+    fdr_grp_pf,
+    unname(unlist(lapply(fdr_grp, `[[`, 1)))[c(3, 5)]
+  ),
+  check.names = FALSE
+) %>%
+  `rownames<-`(c("PrSM", "Proteoform", "AA sequence", "Gene"))
+
+# knitr::kable(table_fdr)
 ```
 
-##### Proportion of missing data
+|            | No filter| Occurrence filter| E-value filter| Inference|   Cluster| Isotopologue cluster|
+|:-----------|---------:|-----------------:|--------------:|---------:|---------:|--------------------:|
+|PrSM        |     1.253|             0.221|          0.079|     0.079| 0.0480000|             0.048000|
+|Proteoform  |     3.838|             0.404|          0.129|     0.129| 0.1109057|             0.122399|
+|AA sequence |     7.094|             0.848|          0.315|     0.315| 0.1390000|             0.139000|
+|Gene        |    17.057|             2.090|          0.784|     1.259| 0.5690000|             0.569000|
 
-The following code calculates the proportion of missing data with and without the MBR step.
+# Proportion of missing data
 
-```{r,results='markup'}
+```{r}
 # To create an msnset object there can only be one feature intensity value.
 # Remove extras by taking the maximum across Dataset, CV, Gene, and pcGroup.
 x_grp <- ms2_grp %>%
@@ -967,8 +1013,10 @@ x_grp <- ms2_grp %>%
 m_no_mbr <- to_msnset(x_grp, meta)
 
 # Compute the proportion of missing data WITHOUT the MBR step.
-sum(is.na(exprs(m_no_mbr))) / prod(dim(exprs(m_no_mbr))) * 100
+prop_no_mbr <- sum(is.na(exprs(m_no_mbr))) / prod(dim(exprs(m_no_mbr))) * 100
 
 # Compute the proportion of missing data WITH the MBR step.
-sum(is.na(exprs(m0))) / prod(dim(exprs(m0))) * 100
+prop_mbr <- sum(is.na(exprs(m0))) / prod(dim(exprs(m0))) * 100
 ```
+
+The percentage of missing data without the MBR step is `r round(prop_no_mbr, 2)`% and with the MBR step it is `r round(prop_mbr, 2)`%.
