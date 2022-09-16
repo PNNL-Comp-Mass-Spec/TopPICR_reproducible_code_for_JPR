@@ -31,10 +31,13 @@ library (tidyverse)
 library (TopPICR)
 ```
 
-# Download necessary files
+This document reproduces the TopPICR workflow and statistical analysis on the CPTAC human-in-mouse xenograft breast cancer data. It takes 4-5 minutes to run all the code to reproduce the analysis, figures, and tables. All the R code used to produce this document can be shown with the button in the top right. Alternatively, individual sections of code can be shown/hidden with the buttons throughout the document on the right hand side of the page.
 
-The files needed to run the TopPICR pipeline can be cloned from this GitHub
-[repo](https://github.com/PNNL-Comp-Mass-Spec/TopPICR_reproducible_code_for_JPR).
+# Code for TopPICR pipeline
+
+The following sections demonstrate a typical TopPICR workflow. The code blocks are separated into several main steps: read TopPIC output into R, identified (or MS2) steps, unidentified (or MS1) steps, match-between-runs (MBR), convert TopPICR output into an MSnSet object, and statistical analysis. 
+
+## Read in TopPIC output
 
 ```{r}
 # Read in the identified or MS2 data -------------------------------------------
@@ -81,6 +84,8 @@ ms1 <- read_toppic(
 )
 ```
 
+## MS2 steps
+
 ```{r}
 # Identified feature (MS2) steps -----------------------------------------------
 
@@ -93,7 +98,7 @@ ms2_rfg <- rm_false_gene(x = ms2)
 ms2_mp <- map_proteoform(
   x = ms2_rfg,
   fst_path = file.path(the_path, "FASTA/"),
-  fst_name = "ID_008269_B09DF3DE.fasta.gz"
+  fst_name = "human_mouse.fasta.gz"
 )
 
 # Filter proteoforms with low counts.
@@ -186,6 +191,8 @@ meta <- create_mdata(
 )
 ```
 
+## MS1 steps
+
 ```{r}
 # Unidentified feature (MS1) steps ---------------------------------------------
 
@@ -217,6 +224,8 @@ ms1_ms2 <- match_features(
 )
 ```
 
+## Convert to MSnSet
+
 ```{r}
 # Create MSnSet object ---------------------------------------------------------
 
@@ -224,6 +233,8 @@ ms1_ms2 <- match_features(
 # an MSnSet object.
 m <- to_msnset(ms1_ms2, meta)
 ```
+
+## Statistical analysis
 
 ```{r}
 # Run statistical analysis -----------------------------------------------------
@@ -262,7 +273,11 @@ res <- res %>%
 
 # Code to reproduce figures
 
-## Figure 2a
+## Figure 2
+
+The following four sections contain the code to reproduce each of the retention time alignment and mass measurement error plots.
+
+### 2a
 
 ```{r}
 ds_names <- names(the_model)
@@ -337,7 +352,7 @@ ggplot(
   ylab("")
 ```
 
-## Figure 2b
+### 2b
 
 ```{r}
 # PPM error --------------------------------------------------------------------
@@ -368,7 +383,7 @@ ms2_rcm %>%
   ylab("")
 ```
 
-## Figure 2c
+### 2c
 
 ```{r}
 # Create deviation boxplots ----------------------------------------------------
@@ -464,7 +479,7 @@ ggplot(tall_z,
   ylab("")
 ```
 
-## Figure 2D
+### 2D
 
 ```{r}
 # Create before/after ppm error box plots --------------------------------------
@@ -515,7 +530,11 @@ ggplot(both,
   ylab("")
 ```
 
-## Figure 3a
+## Figure 3
+
+The following five sections reproduce each of the plots used to create Figure 3 in the manuscript. This figure demonstrates the performance of TopPICR's clustering and isotopologue clustering capabilities.
+
+### 3a
 
 ```{r}
 # Cluster: GAPDH ---------------------------------------------------------------
@@ -545,7 +564,7 @@ ggplot(data = x_gene,
   )
 ```
 
-## Figure 3b
+### 3b
 
 ```{r}
 ggplot(data = x_gene,
@@ -570,7 +589,7 @@ ggplot(data = x_gene,
   )
 ```
 
-## Figure 3c
+### 3c
 
 ```{r}
 ggplot(data = x_gene,
@@ -595,7 +614,7 @@ ggplot(data = x_gene,
   )
 ```
 
-## Figure 3d
+### 3d
 
 ```{r}
 ggplot(data = x_gene,
@@ -620,7 +639,7 @@ ggplot(data = x_gene,
   )
 ```
 
-## Figure 3e
+### 3e
 
 ```{r}
 ggplot(data = x_gene,
@@ -646,6 +665,8 @@ ggplot(data = x_gene,
 ```
 
 ## Figure 4
+
+Code to reproduce the proteoform level plot. The function that computed the proteoform level can be found in the MS2 steps section.
 
 ```{r}
 ms2_pfl %>%
@@ -685,6 +706,8 @@ ms2_pfl %>%
 
 ## Figure 5
 
+The code for the PTM preprocessing steps and reproducing the PTM plot.
+
 ```{r}
 uni_top <- create_mod_data(
   mod_file = "TopPIC_Variable_Mods.txt",
@@ -704,7 +727,11 @@ plot_accession_ptm(x = x_mods,
                    aa_step = 20)
 ```
 
-## Figure 6a
+## Figure 6
+
+Code to reproduce the statistical analysis figure from the manuscript. The following code just reproduces the plots. The code for the actual analysis is in the Statistical analysis section.
+
+### 6a
 
 ```{r}
 exprs(m0) <- log2(exprs(m0))
@@ -727,7 +754,7 @@ complex_heatmap(
 )
 ```
 
-## Figure 6b
+### 6b
 
 ```{r}
 plot_pca(
@@ -748,7 +775,7 @@ plot_pca(
   ylab("")
 ```
 
-## Figure 6c
+### 6c
 
 ```{r}
 plot_volcano(
@@ -773,10 +800,14 @@ plot_volcano(
 
 # Code to reproduce tables
 
-## Table 1 counts
+## Table 1
+
+The code to calculate the counts and FDR found in Table 1 of the manuscript. It is important to note that the definition of proteoform is different for the Cluster and Isotopologue cluster columns. Therefore, the method/functions for calculating the counts and FDR for these columns is different from the method/functions used to calculate these values for the other four columns (No filter, Occurrence filter, E-value filter, and Inference).
+
+### Counts
 
 ```{r}
-# Count unique PrSMs, proteoforms, and genes -----------------------------------
+# Count unique PrSMs, proteoforms, sequences, and genes ------------------------
 
 # Count: no filter ---------------
 
@@ -789,7 +820,7 @@ ms2_mp %>%
 ms2_mp %>%
   distinct(Proteoform) %>%
   nrow(),
-# Count the number of unique clean sequences.
+# Count the number of unique amino acid sequences.
 ms2_mp %>%
   distinct(cleanSeq) %>%
   nrow(),
@@ -810,7 +841,7 @@ ms2_fbc %>%
 ms2_fbc %>%
   distinct(Proteoform) %>%
   nrow(),
-# Count the number of unique clean sequences.
+# Count the number of unique amino acid sequences.
 ms2_fbc %>%
   distinct(cleanSeq) %>%
   nrow(),
@@ -831,7 +862,7 @@ ms2_fdr %>%
 ms2_fdr %>%
   distinct(Proteoform) %>%
   nrow(),
-# Count the number of unique clean sequences.
+# Count the number of unique amino acid sequences.
 ms2_fdr %>%
   distinct(cleanSeq) %>%
   nrow(),
@@ -852,7 +883,7 @@ ms2_ipf %>%
 ms2_ipf %>%
   distinct(Proteoform) %>%
   nrow(),
-# Count the number of unique clean sequences.
+# Count the number of unique amino acid sequences.
 ms2_ipf %>%
   distinct(cleanSeq) %>%
   nrow(),
@@ -875,7 +906,7 @@ ms2_clu %>%
   filter(cluster != 0) %>%
   distinct(Gene, cluster) %>%
   nrow(),
-# Count the number of unique clean sequences.
+# Count the number of unique amino acid sequences.
 ms2_clu %>%
   filter(cluster != 0) %>%
   distinct(cleanSeq) %>%
@@ -898,7 +929,7 @@ ms2_grp %>%
 ms2_grp %>%
   distinct(Gene, pcGroup) %>%
   nrow(),
-# Count the number of unique clean sequences.
+# Count the number of unique amino acid sequences.
 ms2_grp %>%
   distinct(cleanSeq) %>%
   nrow(),
@@ -920,7 +951,7 @@ table_counts <- data.frame(
 ) %>%
   `rownames<-`(c("PrSM", "Proteoform", "AA sequence", "Gene"))
 
-# Produce a latex table with a booktabs format for the Table 1 counts.
+# The following line reproduces the markdown table shown below.
 # knitr::kable(table_counts)
 ```
 
@@ -931,11 +962,9 @@ table_counts <- data.frame(
 |AA sequence |      3679|              2240|           2225|      2225|    2158|                 2158|
 |Gene        |      1482|               908|            893|       556|     527|                  527|
 
-## Table 1 FDR
+### FDR
 
 ```{r}
-options(knitr.table.format = "latex")
-
 # Compute FDR ------------------------------------------------------------------
 
 # NOTE: The counts from the compute_fdr function will be different from the
@@ -987,17 +1016,20 @@ table_fdr <- data.frame(
 ) %>%
   `rownames<-`(c("PrSM", "Proteoform", "AA sequence", "Gene"))
 
-# knitr::kable(table_fdr)
+# The following line reproduces the markdown table shown below.
+# knitr::kable(round(table_fdr, 3))
 ```
 
 |            | No filter| Occurrence filter| E-value filter| Inference|   Cluster| Isotopologue cluster|
 |:-----------|---------:|-----------------:|--------------:|---------:|---------:|--------------------:|
-|PrSM        |     1.253|             0.221|          0.079|     0.079| 0.0480000|             0.048000|
-|Proteoform  |     3.838|             0.404|          0.129|     0.129| 0.1109057|             0.122399|
-|AA sequence |     7.094|             0.848|          0.315|     0.315| 0.1390000|             0.139000|
-|Gene        |    17.057|             2.090|          0.784|     1.259| 0.5690000|             0.569000|
+|PrSM        |     1.253%|             0.221%|          0.079%|     0.079%| 0.048%|             0.048%|
+|Proteoform  |     3.838%|             0.404%|          0.129%|     0.129%| 0.111%|             0.122%|
+|AA sequence |     7.094%|             0.848%|          0.315%|     0.315%| 0.139%|             0.139%|
+|Gene        |    17.057%|             2.090%|          0.784%|     1.259%| 0.569%|             0.569%|
 
-# Proportion of missing data
+# Percentage of missing data
+
+In the manuscript we state that the match-between-runs (MBR) step reduces the percentage of missing data compared to not using this method. Below is the code we used to calculate the percentage of missing data for both methods (with MBR and without MBR).
 
 ```{r}
 # To create an msnset object there can only be one feature intensity value.
