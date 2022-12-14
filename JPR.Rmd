@@ -123,7 +123,7 @@ ms2_fdr <- apply_evalue_cutoff(
 )
 
 # Infer a minimal set of protein sequences.
-ms2_ipf <- infer_pf(ms2_fdr)
+ms2_ipf <- infer_prot(ms2_fdr)
 
 # Determine the proteoform level for each proteoform.
 ms2_pfl <- set_pf_level(ms2_ipf)
@@ -347,8 +347,8 @@ ggplot(
   geom_line(aes(y = predicted_line),
             color = "red",
             size = 1) +
-  xlab("") +
-  ylab("")
+  xlab("retention time (sec)") +
+  ylab("retention time (sec)")
 ```
 
 ### 2b
@@ -378,8 +378,8 @@ ms2_rcm %>%
         strip.background = element_rect(colour = "white",
                                         fill = "white")) +
   scale_y_continuous(expand = c(0, 0)) +
-  xlab("") +
-  ylab("")
+  xlab("mass measurement error (ppm)") +
+  ylab("count")
 ```
 
 ### 2c
@@ -470,12 +470,12 @@ ggplot(tall_z,
   coord_cartesian(ylim = c(-385, 385)) +
   facet_wrap(~when) +
   theme_bw() +
-  theme(strip.background = element_rect(fill = "white"),
+  theme(strip.background = element_blank(),
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
         axis.text = element_text(size = 13),
-        strip.text.x = element_blank()) +
+        strip.text.x = element_text(size = 13)) +
   xlab("") +
-  ylab("")
+  ylab("retention time \nshift (sec)")
 ```
 
 ### 2D
@@ -521,12 +521,12 @@ ggplot(both,
   coord_cartesian(ylim = c(-11, 11)) +
   facet_wrap(~when) +
   theme_bw() +
-  theme(strip.background = element_rect(fill = "white"),
+  theme(strip.background = element_blank(),
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
         axis.text = element_text(size = 13),
-        strip.text.x = element_blank()) +
+        strip.text.x = element_text(size = 13)) +
   xlab("") +
-  ylab("")
+  ylab("mass measurement \nerror (ppm)")
 ```
 
 ## Figure 3
@@ -542,14 +542,35 @@ The following five sections reproduce each of the plots used to create Figure 3 
 x_gene <- ms2_grp %>%
   filter(Gene == "GAPDH")
 
+# Clusters present in the zoomed in portion of the main graph.
+keepers <- c(31, 33, 34, 35, 37, 40, 41, 43, 44, 89, 90, 92, 93, 108) %>%
+  as.character() %>%
+  factor() %>%
+  levels() %>%
+  as.numeric()
+
+keepers_df <- filter(x_gene, cluster %in% keepers)
+
+# Assign custom colors to the clusters in the zoomed portion. This data frame
+# will be used to color these clusters in each of the plots.
+color_df <- data.frame(
+  cluster = keepers,
+  colors = c("#25ECA7", "#62FC6B", "#DA3907", "#39A5FB", "#7A0403", "#D1E935",
+             "#30123B", "#1CCFD5", "#F46516", "#B21A01", "#4777EF", "#4146AD",
+             "#FE9B2D", "#A3FD3C")
+)
+
+keepers_df_w_color <- inner_join(keepers_df, color_df)
+
 ggplot(data = x_gene,
        aes(x = RTalign,
            y = RecalMass,
            color = as.character(cluster))) +
-    geom_point() +
+  geom_point() +
   theme_bw() +
-    theme(panel.border = element_blank(),
-        axis.line = element_blank(),
+  theme(panel.border = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
         axis.ticks = element_blank(),
         axis.text = element_text(size = 14),
         strip.background = element_rect(colour = "white",
@@ -559,107 +580,171 @@ ggplot(data = x_gene,
   xlab("") +
   ylab("") +
   scale_color_manual(
-    values = TopPICR:::turbo(n = length(unique(x_gene$cluster)))
-  )
+    values = TopPICR:::turbo(n = n_distinct(x_gene$cluster))
+  ) +
+  geom_point(
+    data = keepers_df,
+    color = keepers_df_w_color$colors
+  ) +
+  xlab("retention time (sec)") +
+  ylab("mass (Da)")
 ```
 
 ### 3b
 
 ```{r}
-ggplot(data = x_gene,
+ggplot(data = keepers_df,
        aes(x = RTalign,
            y = RecalMass,
            color = as.character(cluster))) +
-    geom_point() +
+  geom_point(size = 2) +
   theme_bw() +
-    theme(panel.border = element_blank(),
-        axis.line = element_blank(),
+  theme(panel.border = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
         axis.ticks = element_blank(),
-        axis.text = element_text(size = 14),
+        axis.text = element_text(size = 12),
         strip.background = element_rect(colour = "white",
                                         fill = "white"),
         legend.position = "none") +
-  scale_x_continuous(expand = c(0, 0), limits = c(4525, 5000)) +
-  scale_y_continuous(expand = c(0, 0), limits = c(3750, 7700)) +
-  xlab("") +
-  ylab("") +
+  scale_x_continuous(expand = c(0, 0), limits = c(4525, 4994)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(4350, 6600)) +
+  xlab("retention time (sec)") +
+  ylab("mass (Da)") +
   scale_color_manual(
-    values = TopPICR:::turbo(n = length(unique(x_gene$cluster)))
+    values = color_df$colors
   )
 ```
 
 ### 3c
 
 ```{r}
-ggplot(data = x_gene,
+point_size <- 4
+
+ggplot(data = keepers_df,
        aes(x = RTalign,
            y = RecalMass,
-           color = as.character(pcGroup))) +
-    geom_point() +
+           color = as.character(cluster))) +
+  geom_point(size = point_size) +
   theme_bw() +
-    theme(panel.border = element_blank(),
-        axis.line = element_blank(),
+  theme(panel.border = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
         axis.ticks = element_blank(),
-        axis.text = element_text(size = 14),
+        axis.text = element_text(size = 13),
         strip.background = element_rect(colour = "white",
                                         fill = "white"),
         legend.position = "none") +
-  scale_x_continuous(expand = c(0, 0), limits = c(4525, 5000)) +
-  scale_y_continuous(expand = c(0, 0), limits = c(3750, 7700)) +
-  xlab("") +
-  ylab("") +
+  scale_x_continuous(expand = c(0, 0), limits = c(4605, 4665)) +
+  scale_y_continuous(
+    expand = c(0, 0),
+    limits = c(4898.72, 4901.18),
+    breaks = c(4899, 4900, 4901)
+  ) +
+  xlab("retention time (sec)") +
+  ylab("mass (Da)") +
   scale_color_manual(
-    values = TopPICR:::turbo(n = length(unique(x_gene$pcGroup)))
+    values = color_df$colors
   )
 ```
 
 ### 3d
 
 ```{r}
-ggplot(data = x_gene,
+ggplot(data = keepers_df,
        aes(x = RTalign,
            y = RecalMass,
            color = as.character(cluster))) +
-    geom_point() +
+  geom_point(size = point_size) +
   theme_bw() +
-    theme(panel.border = element_blank(),
-        axis.line = element_blank(),
+  theme(panel.border = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
         axis.ticks = element_blank(),
-        axis.text = element_text(size = 14),
+        axis.text = element_text(size = 13),
         strip.background = element_rect(colour = "white",
                                         fill = "white"),
         legend.position = "none") +
-  scale_x_continuous(expand = c(0, 0), limits = c(4600, 4665)) +
-  scale_y_continuous(expand = c(0, 0), limits = c(4898.47, 4901.47)) +
-  xlab("") +
-  ylab("") +
+  scale_x_continuous(expand = c(0, 0), limits = c(4605, 4665)) +
+  scale_y_continuous(
+    expand = c(0, 0),
+    limits = c(4898.72, 4901.18),
+    breaks = c(4899, 4900, 4901)
+  ) +
+  xlab("retention time (sec)") +
+  ylab("mass (Da)") +
   scale_color_manual(
-    values = TopPICR:::turbo(n = length(unique(x_gene$cluster)))
+    values = color_df$colors
+  ) +
+  geom_point(
+    data = filter(x_gene, pcGroup == 33),
+    size = point_size,
+    color = filter(color_df, cluster == 33) %>% pull(colors)
   )
 ```
 
 ### 3e
 
 ```{r}
-ggplot(data = x_gene,
+ggplot(data = keepers_df,
        aes(x = RTalign,
            y = RecalMass,
            color = as.character(cluster))) +
-    geom_point() +
+  geom_point(size = point_size) +
   theme_bw() +
-    theme(panel.border = element_blank(),
-        axis.line = element_blank(),
+  theme(panel.border = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
         axis.ticks = element_blank(),
-        axis.text = element_text(size = 14),
+        axis.text = element_text(size = 13),
         strip.background = element_rect(colour = "white",
                                         fill = "white"),
         legend.position = "none") +
-  scale_x_continuous(expand = c(0, 0), limits = c(4800, 4870)) +
-  scale_y_continuous(expand = c(0, 0), limits = c(4541.474, 4544.474)) +
-  xlab("") +
-  ylab("") +
+  scale_x_continuous(expand = c(0, 0), limits = c(4802, 4865)) +
+  scale_y_continuous(
+    expand = c(0, 0),
+    limits = c(4541.474, 4544.474),
+    breaks = c(4542, 4543, 4544)
+  ) +
+  xlab("retention time (sec)") +
+  ylab("mass (Da)") +
   scale_color_manual(
-    values = TopPICR:::turbo(n = length(unique(x_gene$cluster)))
+    values = color_df$colors
+  )
+```
+
+### 3f
+
+```{r}
+ggplot(data = keepers_df,
+       aes(x = RTalign,
+           y = RecalMass,
+           color = as.character(cluster))) +
+  geom_point(size = point_size) +
+  theme_bw() +
+  theme(panel.border = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.ticks = element_blank(),
+        axis.text = element_text(size = 13),
+        strip.background = element_rect(colour = "white",
+                                        fill = "white"),
+        legend.position = "none") +
+  scale_x_continuous(expand = c(0, 0), limits = c(4802, 4865)) +
+  scale_y_continuous(
+    expand = c(0, 0),
+    limits = c(4541.474, 4544.474),
+    breaks = c(4542, 4543, 4544)
+  ) +
+  xlab("retention time (sec)") +
+  ylab("mass (Da)") +
+  scale_color_manual(
+    values = color_df$colors
+  ) +
+  geom_point(
+    data = filter(x_gene, pcGroup == 41),
+    size = point_size,
+    color = filter(color_df, cluster == 41) %>% pull(colors)
   )
 ```
 
@@ -700,7 +785,14 @@ ms2_pfl %>%
         axis.line = element_line(),
         text = element_text(family = "Helvetica")) +
   ylab("% PrSMs") +
-  xlab("Proteoform Level")
+  xlab("proteoform level")
+
+# ggsave("pflevel.png", width = 10, height = 5)
+ggsave(filename = "figure_4.pdf",
+       width = 10,
+       height = 5,
+       units = "in",
+       dpi = "retina")
 ```
 
 ## Figure 5
@@ -723,7 +815,8 @@ x_mods <- add_mods(x = meta,
 plot_accession_ptm(x = x_mods,
                    accession = "P04406",
                    mods_to_name = "top10",
-                   aa_step = 20)
+                   aa_step = 20) +
+    xlab("amino acid position")
 ```
 
 ## Figure 6
@@ -734,22 +827,26 @@ Code to reproduce the statistical analysis figure from the manuscript. The follo
 
 ```{r}
 exprs(m0) <- log2(exprs(m0))
+
 complex_heatmap(
-  m0,
-  heatmap_type = "sample",
-  cluster_columns = F,
-  cluster_rows = F,
-  heatmap_args = list(
-    col = circlize::colorRamp2(
-      breaks = seq(0.4, 1, length.out = 100),
-                               colors = MSnSet.utils::hot.colors(100)
-    ),
-    heatmap_legend_param = list(
-      legend_height = unit(150, "mm"),
-                                legend_width = unit(20, "mm"),
-                                at = seq(0.4, 1, length.out = 7)
+    m0,
+    heatmap_type = "sample",
+    cluster_columns = F,
+    cluster_rows = F,
+    heatmap_args = list(
+        col = circlize::colorRamp2(
+            breaks = seq(0.4, 1, length.out = 100),
+            colors = MSnSet.utils::hot.colors(100)
+        ),
+        row_title = "CR33                          CR32",
+        column_title = "CR32                                                            CR33",
+        column_title_side = "bottom",
+        heatmap_legend_param = list(
+            legend_height = unit(150, "mm"),
+            legend_width = unit(20, "mm"),
+            at = seq(0.4, 1, length.out = 7)
+        )
     )
-  )
 )
 ```
 
@@ -770,8 +867,8 @@ plot_pca(
   ) +
   xlim(-40, 40) +
   ylim(-40, 40) +
-  xlab("") +
-  ylab("")
+  xlab("PC1 (81.46%") +
+  ylab("PC2 (7.05%)")
 ```
 
 ### 6c
@@ -791,10 +888,10 @@ plot_volcano(
   ) +
   theme(
     legend.position = "none",
-    axis.text = element_text(size = 14),
-    axis.title.x = element_blank(),
-    axis.title.y = element_blank()
-  )
+    axis.text = element_text(size = 14)
+  ) +
+  xlab("log2(fold change") +
+  ylab("FDR")
 ```
 
 # Code to reproduce tables
